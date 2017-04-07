@@ -106,10 +106,12 @@ class XMeans(object):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+    from jsklearn.dataset.scatter import get_scatter_2d
 
-    n = 20
-    x = np.array([np.random.normal(loc, 0.1, n) for loc in np.repeat([1,2], 2)]).flatten()
-    y = np.array([np.random.normal(loc, 0.1, n) for loc in np.tile([1,2], 2)]).flatten()
+    data = get_scatter_2d()
+    x = data[:, 0]
+    y = data[:, 1]
+    n = x.shape[0]
 
     if len(x.shape) == 1:
         xdim = 1
@@ -126,9 +128,8 @@ if __name__ == "__main__":
         c = xmeans.cluster_centers_[i]
         print(" * Cluster #%d: %d samples (center: %s)" % (i, s, c))
 
-    plt.scatter(x, y, c=xmeans.labels_, s=30)
+    plt.scatter(x, y, c=xmeans.labels_, marker='x', s=30)
     plt.scatter(xmeans.cluster_centers_[:,0], xmeans.cluster_centers_[:,1], c="r", marker="+", s=100)
-    plt.xlim(0, 3)
-    plt.ylim(0, 3)
     plt.title("XMeans clustering")
+    plt.grid()
     plt.show()
