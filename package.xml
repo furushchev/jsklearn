@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package>
+  <name>jsklearn</name>
+  <version>0.0.0</version>
+  <description>Methods that I learned</description>
+
+  <maintainer email="furushchev@jsk.imi.i.u-tokyo.ac.jp">Yuki Furuta</maintainer>
+  <license>BSD</license>
+  <author email="furushchev@jsk.imi.i.u-tokyo.ac.jp">Yuki Furuta</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <run_depend>python-sklearn</run_depend>
+  <run_depend>python-numpy</run_depend>
+  <run_depend>python-matplotlib</run_depend>
+  <run_depend>rospy</run_depend>
+
+  <export>
+  </export>
+</package>
