@@ -63,7 +63,10 @@ class Kalman(object):
         y = self.z - self.H.dot(self.x)
         S_det = np.linalg.det(self.S)
         S_inv = np.linalg.inv(self.S)
-        err = math.sqrt(S_det) * math.exp(0.5 * y.dot(S_inv).dot(y))
+        try:
+            err = math.sqrt(S_det) * math.exp(0.5 * y.dot(S_inv).dot(y))
+        except OverflowError:
+            err = float("inf")
         return err
 
 
@@ -94,8 +97,9 @@ class AdaptiveKalman(Kalman):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
+    # Dataset Preparation
     n = 20
-    sigma = 0.2
+    sigma = 10
 
     tx = np.linspace(0.0, 10.0, n)
     ty = tx ** 2
@@ -111,35 +115,49 @@ if __name__ == '__main__':
                          [0., 1., 0., 1.],
                          [0., 0., 1., 0.],
                          [0., 0., 0., 1.]])
+    result = np.array(map(lambda z: [kalman.filter(z), kalman.error, kalman.P[1,1]], o))
+    z = np.vstack(result[:, 0]).astype(np.float)
+    err = result[:, 1]
+    cov = result[:, 2]
 
-    z = []
-    e = []
-    for ot in o:
-        z += [kalman.filter(ot)]
-        e += [kalman.error()]
-    z = np.array(z)
-    e = np.array(e) * 10
-    e_lower = z[:,1] - e
-    e_upper = z[:,1] + e
+    fig, (top, bottom) = plt.subplots(nrows=2)
 
-    print(z[:,1])
-    print(e_lower)
-    print(e_upper)
-
-    plt.subplot(2,1,1)  # upper
-    plt.plot(tx, ty, 'rs-', label="Groundtruth")
-    plt.plot(ox, oy, 'g^-', label="Measurement")
-    plt.plot(z[:,0], z[:,1], 'bo-', label="Estimation")
-    plt.fill_between(z[:,0], e_lower, e_upper, facecolor='blue', interpolate=True)
-    plt.title("Kalman Filter (Position-Velocity)")
-    plt.xlim(-1, 11)
-    plt.legend(loc=0)
-
+    top.set_title("Kalman Filter (Position-Velocity)")
+    top.set_xlim(0, 10)
+    top.plot(tx, ty, 'rs-', label="Groundtruth")
+    top.plot(ox, oy, 'g^-', label="Measurement")
+    top.plot(z[:,0], z[:,1], 'bo-', label="Estimation")
+    top.legend(loc=0)
+    top.grid()
+    splt = top.twinx()
+    splt.set_xlim(0, 10)
+    splt.set_ylim(0, 4e-3)
+    splt.plot(tx, cov, 'y*-', label="P Covariance")
+    splt.legend(loc=0)
 
     # Adaptive Kalman Filter
     kalman = AdaptiveKalman(state_dim=4, meas_dim=2, R_var=1e-3)
+    kalman.F = np.array([[1., 0., 1., 0.],
+                         [0., 1., 0., 1.],
+                         [0., 0., 1., 0.],
+                         [0., 0., 0., 1.]])
+    result = np.array(map(lambda z: [kalman.filter(z), kalman.error, kalman.P[1,1]], o))
+    z = np.vstack(result[:, 0]).astype(np.float)
+    err = result[:, 1]
+    cov = result[:, 2]
 
+    bottom.set_title("Adaptive Kalman Filter (Position-Velocity)")
+    bottom.set_xlim(0, 10)
+    bottom.plot(tx, ty, 'rs-', label="Groundtruth")
+    bottom.plot(ox, oy, 'g^-', label="Measurement")
+    bottom.plot(z[:, 0], z[:, 1], 'bo-', label="Estimation")
+    bottom.legend(loc=2)
+    bottom.grid()
+    splt = bottom.twinx()
+    splt.set_xlim(0, 10)
+    splt.set_ylim(0, 4e-3)
+    splt.plot(tx, cov, 'y*-', label="P Covariance")
+    splt.legend(loc=0)
 
-    plt.subplot(2,1,2)  # bottom
-    # TODO: plot
+    fig.tight_layout()
     plt.show()
