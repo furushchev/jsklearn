@@ -3,11 +3,12 @@
 # Copyright: Yuki Furuta <furushchev@jsk.imi.i.u-tokyo.ac.jp>
 
 from __future__ import print_function
+import math
 import numpy as np
 
 
 class Kalman(object):
-    def __init__(self, state_dim=2, meas_dim=2, P_var=1e-5, Q_var=1e-5, R_var=1e-2):
+    def __init__(self, state_dim=2, meas_dim=2, P_var=1., Q_var=1e-5, R_var=1e-2):
         self.B = np.eye(state_dim)
         self.F = np.eye(state_dim)
         self.H = np.eye(meas_dim, state_dim)
@@ -34,6 +35,7 @@ class Kalman(object):
         """
         # y = z - Hx
         y = z - self.H.dot(self.x)
+
         # S = H P H^ + R
         self.S = self.H.dot(self.P.dot(self.H.T)) + self.R
         S_inv = np.linalg.inv(self.S)
@@ -53,32 +55,90 @@ class Kalman(object):
         self.update(z)
         return self.H.dot(self.x)
 
+    def error(self):
+        # y = z - self.H.dot(self.x)
+        # S_det = np.linalg.det(self.S)
+        # S_inv = np.linalg.inv(self.S)
+        # err = math.sqrt(S_det) * math.exp(0.5 * y.dot(S_inv).dot(y))
+        # print(err)
+        err = np.linalg.norm(self.S)
+        return err
+
+
+class AdaptiveKalman(Kalman):
+    def __init__(self, **kwargs):
+        super(AdaptiveKalman, self).__init__(**kwargs)
+        self.ys = []
+
+    def updateR(self, z, m=15):
+        y = z - self.H.dot(self.x)
+        if len(self.ys) < m:
+            self.ys += [y]
+        else:
+            self.ys = self.ys[:-1] + [y]
+            cov = np.zeros(self.R)
+            for y in self.ys:
+                cov += np.outer(y, y)
+            cov *= 1.0 / m
+            self.R = cov + self.H.dot(self.P.dot(self.H.T))
+
+    def filter(self, z):
+        self.predict()
+        self.update()
+        self.updateR()
+        return self.H.dot(self.x)
+
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
     n = 20
-    t = np.linspace(0, 1, n)
-    x_t = np.array([0.0, 0.0])
-    y_t = x_t
-    u_t = np.array([0.2, 0.2])
-    x = [x_t]
-    y = [y_t]
-    u = np.repeat(u_t, n).reshape((n, 2))
-    for i in range(n):
-        x_t = x_t + u_t + np.random.multivariate_normal([0., 0.], np.eye(2) * 0.1, 1)[0]
-        y_t = x_t + np.random.multivariate_normal([0., 0.], np.eye(2) * 0.1, 1)[0]
-        x.append(x_t)
-        y.append(y_t)
+    sigma = 0.2
 
-    x = np.array(x)  # states
-    y = np.array(y)  # observations
+    tx = np.linspace(0.0, 10.0, n)
+    ty = tx ** 2
+    t = np.dstack((tx, ty))[0]
 
-    kalman = Kalman()
+    ox = tx
+    oy = np.random.multivariate_normal(ty, np.eye(ty.shape[0]) * sigma, 1)[0]
+    o = np.dstack((ox, oy))[0]
 
-    z = np.array(map(lambda x_t: kalman.filter(x_t), x))
+    # Kalman Filter ( position - velocity )
+    kalman = Kalman(state_dim=4, meas_dim=2, R_var=1e-3)
+    kalman.F = np.array([[1., 0., 1., 0.],
+                         [0., 1., 0., 1.],
+                         [0., 0., 1., 0.],
+                         [0., 0., 0., 1.]])
 
-    plt.plot(x[:,0], x[:,1], 'rs-')
-    plt.plot(y[:,0], y[:,1], 'g^-')
-    plt.plot(z[:,0], z[:,1], 'bo-')
-    plt.title("Kalman Filter")
+    z = []
+    e = []
+    for ot in o:
+        z += [kalman.filter(ot)]
+        e += [kalman.error()]
+    z = np.array(z)
+    e = np.array(e) * 10
+    e_lower = z[:,1] - e
+    e_upper = z[:,1] + e
+
+    print(z[:,1])
+    print(e_lower)
+    print(e_upper)
+
+    plt.subplot(2,1,1)  # upper
+    plt.plot(tx, ty, 'rs-', label="Groundtruth")
+    plt.plot(ox, oy, 'g^-', label="Measurement")
+    plt.plot(z[:,0], z[:,1], 'bo-', label="Estimation")
+    plt.fill_between(z[:,0], e_lower, e_upper, facecolor='blue', interpolate=True)
+    plt.title("Kalman Filter (Position-Velocity)")
+    plt.xlim(-1, 11)
+    plt.legend(loc=0)
+
+
+    # Adaptive Kalman Filter
+    kalman = AdaptiveKalman(state_dim=4, meas_dim=2, R_var=1e-3)
+    
+
+
+    plt.subplot(2,1,2)  # bottom
+    # TODO: plot
     plt.show()
