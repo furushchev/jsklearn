@@ -7,9 +7,14 @@ import rospkg
 
 _rospack = rospkg.RosPack()
 
-def get_data_path(rel_path):
-    p = os.path.join(_rospack.get_path("jsklearn"), "data", rel_path)
-    if os.path.exists(p):
-        return p
+def get_data_path(rel_path, test=False):
+    path = _rospack.get_path("jsklearn")
+    if test:
+        path = os.path.join(path, "test", "data")
     else:
-        raise IOError("%s not found" % p)
+        path = os.path.join(path, "data")
+    path = os.path.join(path, rel_path)
+    if os.path.exists(path):
+        return path
+    else:
+        raise IOError("%s not found" % path)

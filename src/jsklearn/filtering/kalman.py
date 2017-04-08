@@ -18,8 +18,8 @@ class Kalman(object):
         self.S = np.eye(state_dim)
 
         self.u = np.zeros((state_dim,))
-        z = np.zeros((meas_dim,))
-        self.x = self.H.T.dot(z)
+        self.z = np.zeros((meas_dim,))
+        self.x = self.H.T.dot(self.z)
 
         self.state_dim = state_dim
         self.meas_dim = meas_dim
@@ -33,6 +33,8 @@ class Kalman(object):
         Args:
           z (value or array-like): measurement
         """
+        self.z = z  # for evaluate error
+
         # y = z - Hx
         y = z - self.H.dot(self.x)
 
@@ -53,15 +55,15 @@ class Kalman(object):
     def filter(self, z):
         self.predict()
         self.update(z)
-        return self.H.dot(self.x)
+        x = self.H.dot(self.x)
+        return x
 
+    @property
     def error(self):
-        # y = z - self.H.dot(self.x)
-        # S_det = np.linalg.det(self.S)
-        # S_inv = np.linalg.inv(self.S)
-        # err = math.sqrt(S_det) * math.exp(0.5 * y.dot(S_inv).dot(y))
-        # print(err)
-        err = np.linalg.norm(self.S)
+        y = self.z - self.H.dot(self.x)
+        S_det = np.linalg.det(self.S)
+        S_inv = np.linalg.inv(self.S)
+        err = math.sqrt(S_det) * math.exp(0.5 * y.dot(S_inv).dot(y))
         return err
 
 
@@ -70,13 +72,13 @@ class AdaptiveKalman(Kalman):
         super(AdaptiveKalman, self).__init__(**kwargs)
         self.ys = []
 
-    def updateR(self, z, m=15):
+    def adapt(self, z, m=15):
         y = z - self.H.dot(self.x)
         if len(self.ys) < m:
             self.ys += [y]
         else:
-            self.ys = self.ys[:-1] + [y]
-            cov = np.zeros(self.R)
+            self.ys = self.ys[1:] + [y]
+            cov = np.zeros(self.R.shape)
             for y in self.ys:
                 cov += np.outer(y, y)
             cov *= 1.0 / m
@@ -84,8 +86,8 @@ class AdaptiveKalman(Kalman):
 
     def filter(self, z):
         self.predict()
-        self.update()
-        self.updateR()
+        self.update(z)
+        self.adapt(z)
         return self.H.dot(self.x)
 
 
@@ -136,7 +138,6 @@ if __name__ == '__main__':
 
     # Adaptive Kalman Filter
     kalman = AdaptiveKalman(state_dim=4, meas_dim=2, R_var=1e-3)
-    
 
 
     plt.subplot(2,1,2)  # bottom
