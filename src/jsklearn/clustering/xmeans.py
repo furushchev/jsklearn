@@ -15,7 +15,6 @@ class _Cluster:
         if index is None:
             index = np.array(range(0, x.shape[0]))
         labels = range(0, kmeans.get_params()["n_clusters"])
-
         return (cls(x, index, kmeans, label) for label in labels)
 
     def __init__(self, x, index, kmeans, label):
@@ -52,6 +51,7 @@ class XMeans(object):
 
           Other arguments are passed to sklearn.cluster.KMeans
         """
+        assert init_cluster_num >= 2
         self.init_cluster_num = init_cluster_num
         self.kmeans_args = kmeans_args
 
@@ -93,10 +93,15 @@ class XMeans(object):
 
             kmeans = KMeans(2, **self.kmeans_args).fit(cluster.data)
             c1, c2 = _Cluster.create(cluster.data, kmeans, cluster.index)
-
-            beta = np.linalg.norm(c1.center - c2.center) / np.sqrt(np.linalg.det(c1.cov) + np.linalg.det(c2.cov))
+            try:
+                beta = np.linalg.norm(c1.center - c2.center) / np.sqrt(np.linalg.det(c1.cov) + np.linalg.det(c2.cov))
+            except:
+                beta = 0.0
             alpha = 0.5 / stats.norm.cdf(beta)
-            bic = -2 * (cluster.size * np.log(alpha) + c1.log_likelihood() + c2.log_likelihood()) + 2 * cluster.df * np.log(cluster.size)
+            try:
+                bic = -2 * (cluster.size * np.log(alpha) + c1.log_likelihood() + c2.log_likelihood()) + 2 * cluster.df * np.log(cluster.size)
+            except:
+                bic = float("inf")
 
             if bic < cluster.bic():
                 self._cluster_recursive([c1, c2])
