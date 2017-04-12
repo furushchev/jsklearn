@@ -30,10 +30,16 @@ class _Cluster:
         self.size = self.data.shape[0]
         self.df = self.data.shape[1] * (self.data.shape[1] + 3) / 2
         self.center = kmeans.cluster_centers_[label]
-        self.cov = np.cov(self.data.T)
+        try:
+            self.cov = np.cov(self.data.T)
+        except:
+            self.cov = None
 
     def log_likelihood(self):
-        return sum(stats.multivariate_normal.logpdf(x, self.center, self.cov) for x in self.data)
+        try:
+            return sum(stats.multivariate_normal.logpdf(x, self.center, self.cov) for x in self.data)
+        except:
+            return None
 
     def bic(self):
         return -2 * self.log_likelihood() + self.df * np.log(self.size)
@@ -68,10 +74,18 @@ class XMeans(object):
         """
         self._clusters = []
 
-        clusters = _Cluster.create(x, KMeans(self.init_cluster_num, **self.kmeans_args).fit(x))
+        all_clusters = _Cluster.create(x, KMeans(self.init_cluster_num, **self.kmeans_args).fit(x))
+        clusters = []
+        orphans = []
+        for cluster in all_clusters:
+            if cluster.cov is None:
+                orphans.append(cluster)
+            else:
+                clusters.append(cluster)
         self._cluster_recursive(clusters)
 
         self.labels_ = np.empty(x.shape[0], dtype = np.intp)
+        self._clusters += orphans
         for i, c in enumerate(self._clusters):
             self.labels_[c.index] = i
 
@@ -134,7 +148,7 @@ if __name__ == "__main__":
         print(" * Cluster #%d: %d samples (center: %s)" % (i, s, c))
 
     plt.scatter(x, y, c=xmeans.labels_, marker='x', s=30)
-    plt.scatter(xmeans.cluster_centers_[:,0], xmeans.cluster_centers_[:,1], c="r", marker="+", s=100)
+    plt.scatter(xmeans.cluster_centers_[:,0], xmeans.cluster_centers_[:,1], c="r", marker="*", s=250)
     plt.title("XMeans clustering")
     plt.grid()
     plt.show()
