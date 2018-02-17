@@ -53,7 +53,7 @@ class GMM(object):
 
     def predict(self, x):
         if not self.best_gmm:
-            raise RuntimeError("Model is not yet fit")
+            self.fit(x)
         self.cluster_sizes_ = self.best_gmm.means_.shape[0]
         labels = self.best_gmm.predict(x)
         cluster_size = np.empty(self.best_gmm.means_.shape[0], dtype=np.intp)
@@ -61,6 +61,11 @@ class GMM(object):
             cluster_size[k] = len(np.where(labels==k)[0])
         self.cluster_sizes_ = cluster_size
         return labels
+
+    def score(self, x):
+        if not self.best_gmm:
+            raise RuntimeError("model not fit")
+        return self.best_gmm.score(x)
 
 
 if __name__ == '__main__':
@@ -88,9 +93,20 @@ if __name__ == '__main__':
         c = gmm.cluster_centers_[i]
         print(" * Cluster #%d: %d samples (center: %s)" % (i, s, c))
 
+    # plot data with predicted class
     plt.scatter(X[:, 0], X[:, 1], c=labels, marker='x', s=30)
+
+    # plot center of clusters
     plt.scatter(gmm.cluster_centers_[:, 0], gmm.cluster_centers_[:, 1],
                 c="r", marker="*", s=250)
+
+    # plot ellipse of gaussian
+    mx, my = np.meshgrid(np.linspace(*plt.xlim()), np.linspace(*plt.ylim()))
+    mf = lambda x, y: np.exp(gmm.best_gmm.score(np.array([[x, y]])))
+    mz = np.vectorize(mf)(mx, my)
+    plt.pcolor(mx, my, mz, alpha=0.3)
+    plt.colorbar()
+
     plt.title("GMM clustering")
     plt.grid()
     plt.show()
