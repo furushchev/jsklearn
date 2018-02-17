@@ -5,6 +5,7 @@
 import math
 import numpy as np
 
+
 def get_scatter_2d(num_instance=20, num_class=4, sigma=0.2):
     """
     Generate scatter points which is separatable to some classes.
@@ -18,15 +19,16 @@ def get_scatter_2d(num_instance=20, num_class=4, sigma=0.2):
 
     return np.dstack((x, y, l))[0]
 
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
     np.random.seed(123)
     data = get_scatter_2d()
 
-    x = data[:,0]
-    y = data[:,1]
-    labels = data[:,2]
+    x = data[:, 0]
+    y = data[:, 1]
+    labels = data[:, 2]
 
     plt.scatter(x, y, c=labels, marker='x', s=30)
     plt.title("Scatter Points 2D")

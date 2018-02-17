@@ -2,5 +2,5 @@
 # -*- coding: utf-8 -*-
 # Copyright: Yuki Furuta <furushchev@jsk.imi.i.u-tokyo.ac.jp>
 
-from spartial import *
+from spatial import *
 from temporal import *

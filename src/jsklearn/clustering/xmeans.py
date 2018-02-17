@@ -44,6 +44,7 @@ class _Cluster:
     def bic(self):
         return -2 * self.log_likelihood() + self.df * np.log(self.size)
 
+
 class XMeans(object):
     """
     A clustering method extended from X-means
@@ -57,7 +58,8 @@ class XMeans(object):
 
           Other arguments are passed to sklearn.cluster.KMeans
         """
-        assert init_cluster_num >= 2
+
+        assert isinstance(init_cluster_num, int) and init_cluster_num >= 2
         self.init_cluster_num = init_cluster_num
         self.kmeans_args = kmeans_args
 
@@ -74,7 +76,8 @@ class XMeans(object):
         """
         self._clusters = []
 
-        all_clusters = _Cluster.create(x, KMeans(self.init_cluster_num, **self.kmeans_args).fit(x))
+        all_clusters = _Cluster.create(
+            x, KMeans(self.init_cluster_num, **self.kmeans_args).fit(x))
         clusters = []
         orphans = []
         for cluster in all_clusters:
@@ -84,7 +87,7 @@ class XMeans(object):
                 clusters.append(cluster)
         self._cluster_recursive(clusters)
 
-        self.labels_ = np.empty(x.shape[0], dtype = np.intp)
+        self.labels_ = np.empty(x.shape[0], dtype=np.intp)
         self._clusters += orphans
         for i, c in enumerate(self._clusters):
             self.labels_[c.index] = i
@@ -122,24 +125,28 @@ class XMeans(object):
             else:
                 self._clusters.append(cluster)
 
+    def predict(self, x):
+        self.fit(x)
+        return self.labels_
+
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from jsklearn.dataset.scatter import get_scatter_2d
+    from jsklearn.dataset import get_scatter_2d
+
+    random_state = 123
+    np.random.seed(random_state)
 
     data = get_scatter_2d()
-    x = data[:, 0]
-    y = data[:, 1]
-    n = x.shape[0]
+    X = data[:, :-1]
+    t = data[:, -1]
+    n, xdim = X.shape
 
-    if len(x.shape) == 1:
-        xdim = 1
-    else:
-        xdim = x.shape[1]
     print("Dataset: %d samples with %d dimensions" % (n, xdim))
 
     print("Computing KMeans Clustering...")
-    xmeans = XMeans(random_state = 123).fit(np.c_[x,y])
+    xmeans = XMeans(random_state=random_state).fit(X)
+    labels = xmeans.predict(X)
     print("Done.")
 
     print("Optimal Cluster Num: %d" % len(xmeans.cluster_sizes_))
@@ -147,8 +154,9 @@ if __name__ == "__main__":
         c = xmeans.cluster_centers_[i]
         print(" * Cluster #%d: %d samples (center: %s)" % (i, s, c))
 
-    plt.scatter(x, y, c=xmeans.labels_, marker='x', s=30)
-    plt.scatter(xmeans.cluster_centers_[:,0], xmeans.cluster_centers_[:,1], c="r", marker="*", s=250)
+    plt.scatter(X[:, 0], X[:, 1], c=labels, marker='x', s=30)
+    plt.scatter(xmeans.cluster_centers_[:, 0], xmeans.cluster_centers_[:, 1],
+                c="r", marker="*", s=250)
     plt.title("XMeans clustering")
     plt.grid()
     plt.show()
