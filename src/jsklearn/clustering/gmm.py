@@ -60,12 +60,18 @@ class GMM(object):
         for k in range(self.best_gmm.means_.shape[0]):
             cluster_size[k] = len(np.where(labels==k)[0])
         self.cluster_sizes_ = cluster_size
+        self.weights_ = self.best_gmm.weights_
         return labels
 
     def score(self, x):
         if not self.best_gmm:
             raise RuntimeError("model not fit")
         return self.best_gmm.score(x)
+
+    def score_samples(self, x):
+        if not self.best_gmm:
+            raise RuntimeError("model not fit")
+        return self.best_gmm.score_samples(x)
 
     @property
     def covariances_(self):
@@ -119,6 +125,7 @@ if __name__ == '__main__':
         print(" * Cluster #%d: %d samples (center: %s)" % (i, s, c))
     print("Covariance type: %s" % gmm.covariance_type)
     print("Covariance: %s" % gmm.covariances_)
+    print("Weights: %s" % gmm.weights_)
 
     # plot data with predicted class
     plt.scatter(X[:, 0], X[:, 1], c=labels, marker='x', s=30)
@@ -129,7 +136,7 @@ if __name__ == '__main__':
 
     # plot ellipse of gaussian
     mx, my = np.meshgrid(np.linspace(*plt.xlim()), np.linspace(*plt.ylim()))
-    mf = lambda x, y: np.exp(gmm.best_gmm.score(np.array([[x, y]])))
+    mf = lambda x, y: np.exp(gmm.best_gmm.score_samples(np.array([[x, y]])))
     mz = np.vectorize(mf)(mx, my)
     plt.pcolor(mx, my, mz, alpha=0.3)
     plt.colorbar()
