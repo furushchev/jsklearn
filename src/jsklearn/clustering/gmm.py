@@ -28,7 +28,8 @@ class GMM(object):
         if "n_components" in self.gmm_args:
             n_clusters = [self.gmm_args.pop("n_components")]
         else:
-            n_clusters = range(1, self.max_cluster_num+1)
+            n_samples = x.shape[0]
+            n_clusters = range(1, min(self.max_cluster_num, n_samples)+1)
         if "covariance_type" in self.gmm_args:
             c_types = [self.gmm_args.pop("covariance_type")]
         else:
