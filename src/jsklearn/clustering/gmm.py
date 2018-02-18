@@ -26,11 +26,11 @@ class GMM(object):
           x: array or sparse matrix whose shape is (n_samples, n_features)
         """
         if "n_components" in self.gmm_args:
-            n_clusters = self.gmm_args.pop("n_components")
+            n_clusters = [self.gmm_args.pop("n_components")]
         else:
             n_clusters = range(1, self.max_cluster_num+1)
         if "covariance_type" in self.gmm_args:
-            c_types = self.gmm_args.pop("covariance_type")
+            c_types = [self.gmm_args.pop("covariance_type")]
         else:
             c_types = ["spherical", "tied", "diag", "full"]
         min_bic = np.inf
@@ -67,6 +67,31 @@ class GMM(object):
             raise RuntimeError("model not fit")
         return self.best_gmm.score(x)
 
+    @property
+    def covariances_(self):
+        if not self.best_gmm:
+            raise RuntimeError("model not fit")
+        cov = self.best_gmm.covariances_
+        cov_type = self.best_gmm.covariance_type
+        n, dim = self.best_gmm.means_.shape
+        if cov_type is "full":
+            return cov
+        elif cov_type is "tied":
+            return np.array([cov for i in range(n)])
+        elif cov_type is "diag":
+            return np.array([np.diag(m) for m in cov])
+        elif cov_type is "spherical":
+            return np.array([np.eye(dim) * m for m in cov])
+
+    def __getattr__(self, key):
+        params = self.best_gmm.get_params(True)
+        if key in params:
+            return params[key]
+        elif hasattr(self, key):
+            return getattr(self, key)
+        else:
+            raise KeyError
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -92,6 +117,8 @@ if __name__ == '__main__':
     for i, s in enumerate(gmm.cluster_sizes_):
         c = gmm.cluster_centers_[i]
         print(" * Cluster #%d: %d samples (center: %s)" % (i, s, c))
+    print("Covariance type: %s" % gmm.covariance_type)
+    print("Covariance: %s" % gmm.covariances_)
 
     # plot data with predicted class
     plt.scatter(X[:, 0], X[:, 1], c=labels, marker='x', s=30)
