@@ -64,6 +64,9 @@ class GMM(object):
         self.weights_ = self.best_gmm.weights_
         return labels
 
+    def fit_predict(self, x):
+        return self.fit(x).predict(x)
+
     def score(self, x):
         if not self.best_gmm:
             raise RuntimeError("model not fit")

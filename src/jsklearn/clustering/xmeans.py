@@ -129,6 +129,9 @@ class XMeans(object):
         self.fit(x)
         return self.labels_
 
+    def fit_predict(self, x):
+        return self.predict(x)
+
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
