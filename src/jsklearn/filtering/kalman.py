@@ -87,10 +87,10 @@ class AdaptiveKalman(Kalman):
             cov *= 1.0 / m
             self.R = cov + self.H.dot(self.P.dot(self.H.T))
 
-    def filter(self, z):
+    def filter(self, z, m=15):
         self.predict()
         self.update(z)
-        self.adapt(z)
+        self.adapt(z, m=m)
         return self.H.dot(self.x)
 
 
