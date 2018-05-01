@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>jsklearn</name>
-  <version>0.0.0</version>
+  <version>0.1.1</version>
   <description>Methods that I learned</description>
 
   <maintainer email="furushchev@jsk.imi.i.u-tokyo.ac.jp">Yuki Furuta</maintainer>
