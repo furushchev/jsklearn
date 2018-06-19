@@ -2,19 +2,32 @@
 # -*- coding: utf-8 -*-
 # Copyright: Yuki Furuta <furushchev@jsk.imi.i.u-tokyo.ac.jp>
 
-import os
-import rospkg
+from pathlib2 import Path
 
-_rospack = rospkg.RosPack()
+_rospack = None
+
 
 def get_data_path(rel_path, test=False):
-    path = _rospack.get_path("jsklearn")
+    global _rospack
+    # first search from relative to this file
+    rel_path = Path(rel_path)
+    base_path = Path(__file__).parent.absolute().parent.parent
     if test:
-        path = os.path.join(path, "test", "data")
+        path = base_path / "test" / "data" / rel_path
     else:
-        path = os.path.join(path, "data")
-    path = os.path.join(path, rel_path)
-    if os.path.exists(path):
-        return path
+        path = base_path / "data" / rel_path
+    if path.exists():
+        return str(path)
+    # fallback to use from ros package
+    import rospkg
+    if _rospack is None:
+        _rospack = rospkg.RosPack()
+    base_path = Path(_rospack.get_path("jsklearn"))
+    if test:
+        path = base_path / "test" / "data" / rel_path
+    else:
+        path = base_path / "data" / rel_path
+    if path.exists():
+        return str(path)
     else:
         raise IOError("%s not found" % path)
