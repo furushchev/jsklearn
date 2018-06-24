@@ -14,17 +14,18 @@ from epic_kitchen_object_detection_labels import epic_kitchen_object_detection_l
 
 class EpicKitchenObjectDetectionDataset(chainer.dataset.DatasetMixin):
     def __init__(self, data_dir="auto", anno_path="auto", split="train",
-                 force_download=False, skip_no_image=True, skip_no_bbox=False):
+                 force_download=False, download_timeout=None,
+                 skip_no_image=True, skip_no_bbox=False):
         if split not in ["train"]:
             raise ValueError("Split '%s' not available" % split)
 
         if data_dir == "auto":
             if anno_path == "auto":
                 data_dir, anno_path, annotations = get_object_detection_images(
-                    split, force_download=force_download)
+                    split, force_download=force_download, download_timeout=download_timeout)
             else:
                 data_dir = get_object_detection_images(
-                    split, force_download=force_download)[0]
+                    split, force_download=force_download, download_timeout=download_timeout)[0]
                 annotations = parse_object_detection_annotation(anno_path)
         else:
             if anno_path == "auto":
