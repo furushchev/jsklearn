@@ -68,7 +68,7 @@ class EpicKitchenObjectDetectionDataset(chainer.dataset.DatasetMixin):
             bbox = []
             labels = []
             for anno in annos:
-                for top, left, width, height in anno["bounding_boxes"]:
+                for top, left, height, width in anno["bounding_boxes"]:
                     bbox.append([top, left, top+height, left+width])
                     labels.append(anno["noun_class"])
             bbox = np.asarray(bbox, dtype=np.float32)
