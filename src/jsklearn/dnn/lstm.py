@@ -33,7 +33,6 @@ class LSTM(chainer.Chain):
         forget_bias_init(f)
 
     def reset_state(self):
-        self.cleargrads()
         self.c = None
         self.h = None
 
@@ -96,6 +95,8 @@ class ConvLSTM2D(chainer.Chain):
         self.upward_init = upward_init
         self.bias_init = bias_init
         self.forget_bias_init = forget_bias_init
+        self.c = None
+        self.h = None
 
         with self.init_scope():
             self.upward=L.Convolution2D(in_channels, 4 * out_channels,

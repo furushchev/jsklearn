@@ -133,6 +133,7 @@ class BPTTUpdater(training.updaters.StandardUpdater):
         model = optimizer.target
         loss = chainer.Variable(model.xp.array(0, dtype=model.xp.float32))
 
+        model.reset_state()
         for i in range(self.episode_len):
             if train_iter.is_new_epoch:
                 model.cleargrads()

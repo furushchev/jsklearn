@@ -147,37 +147,35 @@ class EpisodeIterator(chainer.dataset.Iterator):
         return data[:-1], data[:-1], data[1:]  # x, t_reconst, t_pred
 
 
+
 class EpisodeUpdater(training.updaters.StandardUpdater):
     def __init__(self, train_iter, optimizer, device):
         super(EpisodeUpdater, self).__init__(
-            train_iter, optimizer, device=device)
+            train_iter, optimizer,
+            device=device,)
 
     def update_core(self):
         train_iter = self.get_iterator("main")
         optimizer = self.get_optimizer("main")
         model = optimizer.target
-        loss = chainer.Variable(model.xp.array(0, dtype=model.xp.float32))
-        if model.xp == np:
-            loss.to_cpu()
-        else:
-            loss.to_gpu(model._device_id)
-
         assert train_iter.episode_length == model.episode_size
+
+        loss = 0
 
         model.reset_state()
         x, t_reconst, t_pred = next(train_iter)  # NBCHW
         n = x.shape[0]
         for i in range(n):
-            xi = self.converter(x[i], self.device)
+            xi = chainer.dataset.to_device(self.device, x[i])
             tri = xi  # self.converter(t_reconst[i], self.device)
-            tpi = self.converter(t_pred[i], self.device)
+            tpi = chainer.dataset.to_device(self.device, t_pred[i])
             loss += model(chainer.Variable(xi),
                           chainer.Variable(tri),
                           chainer.Variable(tpi))
 
         model.cleargrads()
         loss.backward()
-        # loss.unchain_backward()  # not necessary?
+        loss.unchain_backward()  # not necessary?
         optimizer.update()
 
 
