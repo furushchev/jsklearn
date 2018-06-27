@@ -120,11 +120,11 @@ class DEMEncoder(chainer.Chain):
         h = self.fc_conv(F.dropout(h, ratio=self.dropout_ratio))
         h = self.fc_lstm(F.dropout(h, ratio=self.dropout_ratio))
         #
-        return self.fc_lstm.c
+        return F.concat((self.fc_lstm.c, self.fc_lstm.h))  # 2 * fc_lstm_channels
 
 
 class DEMDecoder(chainer.Chain):
-    def __init__(self, encoder, out_channels, fc_lstm_channels=1000, dropout_ratio=0.1,
+    def __init__(self, out_channels, fc_lstm_channels=1000, dropout_ratio=0.1,
                  norm_layer_cls=LayerNormalization):
         super(DEMDecoder, self).__init__(
             fc_lstm=ConvLSTM2D(fc_lstm_channels, fc_lstm_channels, 1, pad=0),
@@ -155,9 +155,10 @@ class DEMDecoder(chainer.Chain):
             deconv5=L.Deconvolution2D(32, out_channels, 5, stride=2, pad=2, outsize=(128, 128)),
         )
 
-        self.fc_lstm.copyparams(encoder.fc_lstm)
-        self.fc_lstm_h = copy.copy(encoder.fc_lstm.h)
+        # self.fc_lstm.copyparams(encoder.fc_lstm)
+        # self.fc_lstm_h = copy.copy(encoder.fc_lstm.h)
 
+        self.fc_lstm_channels = fc_lstm_channels
         self.dropout_ratio = dropout_ratio
         self.reset_state()
 
@@ -166,11 +167,13 @@ class DEMDecoder(chainer.Chain):
             if link != self and hasattr(link, "reset_state"):
                 link.reset_state()
 
-    def __call__(self, x=None):
-        if x is None:
-            x = copy.copy(self.fc_lstm_h)
+    def __call__(self, x):
+        assert isinstance(x, chainer.Variable)
+        assert x.shape[1] == self.fc_lstm_channels * 2
+        c, h = F.split_axis(x, 2, axis=1)
+        self.fc_lstm.c, self.fc_lstm.h = c, h
 
-        h = self.fc_lstm(x)
+        h = self.fc_lstm(h)
         h = self.fc_deconv(F.dropout(h, ratio=self.dropout_ratio))
         #
         h = self.lstm1(F.dropout(h, ratio=self.dropout_ratio))
@@ -208,7 +211,7 @@ class DEMDecoder(chainer.Chain):
 class DEMNet(chainer.Chain):
     """Composite model for Deep Episodic Memory Network"""
 
-    def __init__(self, out_channels, encoder_cls=None, decoder_cls=None, episode_size=None):
+    def __init__(self, hidden_channels, out_channels, encoder_cls=None, decoder_cls=None, episode_size=None):
         super(DEMNet, self).__init__()
 
         if encoder_cls is None:
@@ -217,9 +220,9 @@ class DEMNet(chainer.Chain):
             decoder_cls = DEMDecoder
 
         with self.init_scope():
-            self.encoder = encoder_cls()
-            self.decoder_reconst = decoder_cls(self.encoder, out_channels)
-            self.decoder_pred = decoder_cls(self.encoder, out_channels)
+            self.encoder = encoder_cls(fc_lstm_channels=hidden_channels)
+            self.decoder_reconst = decoder_cls(fc_lstm_channels=hidden_channels, out_channels=out_channels)
+            self.decoder_pred = decoder_cls(fc_lstm_channels=hidden_channels, out_channels=out_channels)
 
         if episode_size is None:
             episode_size = 5
@@ -236,4 +239,8 @@ class DEMNet(chainer.Chain):
         hidden = self.encoder(x)
         reconst = self.decoder_reconst(hidden)
         pred = self.decoder_pred(hidden)
-        return pred, reconst, hidden
+        with chainer.cuda.get_device_from_id(self._device_id):
+            pred_ret = chainer.Variable(pred.array.copy())
+            reconst_ret = chainer.Variable(reconst.array.copy())
+            hidden_ret = chainer.Variable(hidden.array.copy())
+        return pred_ret, reconst_ret, hidden_ret
