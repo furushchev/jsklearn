@@ -209,7 +209,9 @@ class DEMDecoder(chainer.Chain):
 
 
 class DEMNet(chainer.Chain):
-    """Composite model for Deep Episodic Memory Network"""
+    """Composite model for Deep Episodic Memory Network
+       https://arxiv.org/pdf/1801.04134.pdf
+    """
 
     def __init__(self, hidden_channels, out_channels, encoder_cls=None, decoder_cls=None, episode_size=None):
         super(DEMNet, self).__init__()

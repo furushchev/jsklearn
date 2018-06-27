@@ -37,8 +37,12 @@ def predict(model_path, data_dir, gpu, fps):
         chainer.serializers.load_npz(model_path, model)
 
     click.echo("Loading dataset")
-    # train_data = VideoDataset(data_dir, fps=fps)
-    train_data = EpicKitchenActionDataset(split="train", fps=fps)
+    if data_dir.lower() == "kitchen":
+        click.echo("Using preset kitchen dataset")
+        click.echo("fps is set to 4.0")
+        train_data = EpicKitchenActionDataset(split="train", fps=4.0)
+    else:
+        train_data = VideoDataset(data_dir, fps=fps)
 
     plt.ion()
     fig = plt.figure()
