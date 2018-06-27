@@ -78,29 +78,58 @@ class FCLSTM(chainer.Chain):
 
 
 class ConvLSTM2D(chainer.Chain):
-    def __init__(self, in_channels, out_channels, ksize=None, stride=1, pad=0):
+    def __init__(self, in_channels, out_channels, ksize=None, stride=1, pad=None):
+        if pad is None:
+            pad = ksize // 2
         super(ConvLSTM2D, self).__init__(
             upward=L.Convolution2D(in_channels, 4 * out_channels,
                                    ksize=ksize, stride=stride, pad=pad),
-            hidden=L.Convolution2D(in_channels, 4 * out_channels,
-                                   ksize=ksize, stride=stride, pad=pad),
+            hidden=L.Convolution2D(out_channels, 4 * out_channels,
+                                   ksize=ksize, stride=stride, pad=pad, nobias=True),
         )
-
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.reset_state()
 
     def reset_state(self):
-        self.cleargrapds()
+        self.cleargrads()
         self.c = None
         self.h = None
 
+    def to_cpu(self):
+        super(ConvLSTM2D, self).to_cpu()
+        if self.c is not None:
+            self.c.to_cpu()
+        if self.h is not None:
+            self.h.to_cpu()
+
+    def to_gpu(self, device=None):
+        super(ConvLSTM2D, self).to_gpu(device)
+        if self.c is not None:
+            self.c.to_gpu(device)
+        if self.h is not None:
+            self.h.to_gpu(device)
+
     def __call__(self, x):
-        batch_size = x.shape[0]
-        if self.h is None:
-            self.h = chainer.Variable(self.xp.zeros((batch_size, self.hidden_size), dtype=self.xp.float32))
+        # print "in", self.in_channels, "out", self.out_channels
+        batch_size, in_channels, height, width = x.shape
+
+        h = self.upward(x)
+
+        if self.h is not None:
+            hh = self.hidden(self.h)
+            h += hh
+
         if self.c is None:
-            self.c = chainer.Variable(self.xp.zeros((batch_size, self.hidden_size), dtype=self.xp.float32))
+            in_size = list(x.shape)
+            in_size[1] = self.out_channels
+            c = chainer.Variable(
+                self.xp.zeros(tuple(in_size), dtype=self.xp.float32))
+            if self.xp == np:
+                c.to_cpu()
+            else:
+                c.to_gpu(self._device_id)
+            self.c = c
 
-        h = self.upward(x) + self.hidden(self.h)
         self.c, self.h = F.lstm(self.c, h)
-
         return self.h

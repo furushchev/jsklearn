@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 # Author: lfurushchev <furushchev@jsk.imi.i.u-tokyo.ac.jp>
 
+import cv2
+from collections import defaultdict
 import chainer
 import numpy as np
 import os.path as osp
@@ -13,8 +15,8 @@ from epic_kitchen_action_labels import epic_kitchen_action_label_names
 
 
 class EpicKitchenActionDataset(chainer.dataset.DatasetMixin):
-    def __init__(self, data_dir="auto", anno_path="auto", split="train",
-                 fps=1.0,
+    def __init__(self, split="train", data_dir="auto", anno_path="auto",
+                 fps=1.0, resize=(128, 128),
                  force_download=False, download_timeout=None,
                  skip_no_image=True):
         if split not in ["train", "test"]:
@@ -38,19 +40,41 @@ class EpicKitchenActionDataset(chainer.dataset.DatasetMixin):
         self.split = split
         self.annotations = self._filter_annotations(annotations)
         self.fps = fps
+        self.resize = resize
 
     def __len__(self):
         return len(self.annotations)
 
     def _filter_annotations(self, annotations, skip_no_image=True):
-        valid_annos = []
-        for anno in annotations:
-            if skip_no_image:
-                video_path = self.get_video_path(anno)
+        if skip_no_image:
+            annos = defaultdict(list)
+            for annotation in annotations:
+                video_path = self.get_video_path(annotation)
+                annos[video_path].append(annotation)
+                # break  # TEMP
+
+            for video_path in annos.keys():
                 if not osp.exists(video_path):
+                    del annos[video_path]
                     continue
-            valid_annos.append(anno)
-        return valid_annos
+                video = None
+                try:
+                    video = imageio.get_reader(video_path)
+                    meta = video.get_meta_data()
+                    annos[video_path] = filter(lambda a: a["stop_frame"] < meta["nframes"],
+                                               annos[video_path])
+                except Exception as e:
+                    print "video %s is not available" % (video_path)
+                    del annos[video_path]
+                finally:
+                    if video is not None:
+                        video.close()
+            ret = []
+            for a in annos.values():
+                ret.extend(a)
+            annotations = ret
+
+        return annotations
 
     def get_video_path(self, annotation):
         pid, vid = annotation["participant_id"], annotation["video_id"]
@@ -60,22 +84,49 @@ class EpicKitchenActionDataset(chainer.dataset.DatasetMixin):
     def get_images(self, annotation):
         video_path = self.get_video_path(annotation)
         video = imageio.get_reader(video_path)
-        meta = video.get_meta_data()
-        video_frames, video_fps = meta["nframes"], meta["fps"]
-        nskips = int(video_fps // self.fps)
+        try:
+            meta = video.get_meta_data()
+            video_frames, video_fps = meta["nframes"], meta["fps"]
+            nskips = int(video_fps // self.fps)
 
-        start_frame = annotation["start_frame"]
-        stop_frame = annotation["stop_frame"]
+            start_frame = annotation["start_frame"]
+            stop_frame = annotation["stop_frame"]
 
-        images = []
-        for i in range(start_frame, stop_frame, nskips):
-            img = video.get_data(i)
-            if img.ndim == 2:
-                img = img[np.newaxis]  # 1HW
-            else:
-                img = img.transpose((2, 0, 1))  # CHW
-            images.append(img)
-        return np.asarray(images, dtype=np.float32)
+            images = []
+            for i in range(start_frame, stop_frame, nskips):
+                try:
+                    img = video.get_data(i)
+                    if self.resize:
+                        img = cv2.resize(img, self.resize)
+                except IndexError as e:
+                    import traceback
+                    print traceback.format_exc()
+                    print meta
+                    print i, start_frame, stop_frame, nskips
+                    print range(start_frame, stop_frame, nskips)
+                    raise e
+                if img.ndim == 2:
+                    img = img[np.newaxis]  # 1HW
+                else:
+                    img = img.transpose((2, 0, 1))  # CHW
+                images.append(img)
+            return np.asarray(images, dtype=np.float32)
+        finally:
+            video.close()
+
+    def get_length(self, i):
+        annotation = self.annotations[i]
+        video_path = self.get_video_path(annotation)
+        video = imageio.get_reader(video_path)
+        try:
+            meta = video.get_meta_data()
+            video_frames, video_fps = meta["nframes"], meta["fps"]
+            nskips = int(video_fps // self.fps)
+            start_frame = annotation["start_frame"]
+            stop_frame = annotation["stop_frame"]
+            return len(range(start_frame, stop_frame, nskips))
+        finally:
+            video.close()
 
     def get_example(self, i):
         annotation = self.annotations[i]

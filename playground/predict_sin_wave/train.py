@@ -106,8 +106,6 @@ def train_custom(hidden, step, batch_size, gpu, max_epoch, out, dth):
                     batch_size,
                 )
 
-                model.cleargrads()
-                model.reset_state()
                 loss = chainer.Variable(model.xp.array(0, dtype=model.xp.float32))
                 for i in range(episode_length):
                     batch = []
@@ -120,7 +118,11 @@ def train_custom(hidden, step, batch_size, gpu, max_epoch, out, dth):
                         x = chainer.cuda.to_gpu(x, gpu)
                         t = chainer.cuda.to_gpu(t, gpu)
                     loss += model(x, t)
+
+                model.cleargrads()
+                # model.reset_state()
                 loss.backward()
+                loss.unchain_backward()
                 optimizer.update()
             print(epoch, iteration, loss)
     chainer.serializers.save_npz("%s.model" % out, model)

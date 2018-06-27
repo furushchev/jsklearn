@@ -12,3 +12,4 @@ from lstm import ConvLSTM2D
 #
 from dem_net import DEMEncoder
 from dem_net import DEMDecoder
+from dem_net import DEMNet
