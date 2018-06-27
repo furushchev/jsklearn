@@ -9,6 +9,7 @@ import numpy as np
 import os.path as osp
 from chainercv import utils
 import imageio
+import pandas as pd
 from epic_kitchen_utils import get_action_videos
 from epic_kitchen_utils import parse_action_annotation
 from epic_kitchen_action_labels import epic_kitchen_action_label_names
@@ -17,15 +18,15 @@ from epic_kitchen_action_labels import epic_kitchen_action_label_names
 class EpicKitchenActionDataset(chainer.dataset.DatasetMixin):
     def __init__(self, split="train", data_dir="auto", anno_path="auto",
                  fps=1.0, resize=(128, 128),
-                 force_download=False, download_timeout=None,
-                 skip_no_image=True):
+                 force_download=False, download_timeout=None, use_cache=True,
+                 skip_error_files=True):
         if split not in ["train", "test"]:
             raise ValueError("Split '%s' not available" % split)
 
         if data_dir == "auto":
             if anno_path == "auto":
                 data_dir, anno_path, annotations = get_action_videos(
-                    split, force_download=force_download, download_timeout=download_timeout)
+                    split, force_download=force_download, download_timeout=download_timeout, use_cache=use_cache, skip_error_files=skip_error_files)
             else:
                 data_dir = get_action_videos(
                     split, force_download=force_download, download_timeout=download_timeout)[0]
@@ -38,43 +39,12 @@ class EpicKitchenActionDataset(chainer.dataset.DatasetMixin):
 
         self.data_dir = data_dir
         self.split = split
-        self.annotations = self._filter_annotations(annotations)
+        self.annotations = annotations
         self.fps = fps
         self.resize = resize
 
     def __len__(self):
         return len(self.annotations)
-
-    def _filter_annotations(self, annotations, skip_no_image=True):
-        if skip_no_image:
-            annos = defaultdict(list)
-            for annotation in annotations:
-                video_path = self.get_video_path(annotation)
-                annos[video_path].append(annotation)
-                # break  # TEMP
-
-            for video_path in annos.keys():
-                if not osp.exists(video_path):
-                    del annos[video_path]
-                    continue
-                video = None
-                try:
-                    video = imageio.get_reader(video_path)
-                    meta = video.get_meta_data()
-                    annos[video_path] = filter(lambda a: a["stop_frame"] < meta["nframes"],
-                                               annos[video_path])
-                except Exception as e:
-                    print "video %s is not available" % (video_path)
-                    del annos[video_path]
-                finally:
-                    if video is not None:
-                        video.close()
-            ret = []
-            for a in annos.values():
-                ret.extend(a)
-            annotations = ret
-
-        return annotations
 
     def get_video_path(self, annotation):
         pid, vid = annotation["participant_id"], annotation["video_id"]

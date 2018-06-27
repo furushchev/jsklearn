@@ -5,3 +5,4 @@
 from spatial import *
 from temporal import *
 from epic_kitchen import *
+from video_dataset import VideoDataset

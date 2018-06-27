@@ -157,8 +157,41 @@ def parse_action_annotation(in_path):
         annotations.append(row.to_dict())
     return annotations
 
+def _filter_action_annotations(data_dir, split, annotations):
+    from collections import defaultdict
+    import imageio
 
-def get_action_videos(split="train", download_parallel_num=None, download_timeout=None, force_download=False):
+    annos = defaultdict(list)
+    for annotation in annotations:
+        pid, vid = annotation["participant_id"], annotation["video_id"]
+        video_path = osp.join(data_dir, split, pid, vid + ".MP4")
+        annos[video_path].append(annotation)
+
+    for video_path in annos.keys():
+        if not osp.exists(video_path):
+            del annos[video_path]
+            continue
+        video = None
+        try:
+            video = imageio.get_reader(video_path)
+            meta = video.get_meta_data()
+            annos[video_path] = filter(lambda a: a["stop_frame"] < meta["nframes"],
+                                       annos[video_path])
+        except Exception as e:
+            print "video %s is broken" % (video_path)
+            del annos[video_path]
+        finally:
+            if video is not None:
+                video.close()
+    ret = []
+    for a in annos.values():
+        ret.extend(a)
+    return ret
+
+
+def get_action_videos(split="train", download_parallel_num=None, download_timeout=None, force_download=False, use_cache=True, skip_error_files=True):
+    import pandas as pd
+
     if split != "train":
         raise ValueError("split '%s' not available" % split)
 
@@ -166,15 +199,23 @@ def get_action_videos(split="train", download_parallel_num=None, download_timeou
     videos_root = osp.join(data_dir, "videos")
     annos_root = osp.join(data_dir, "annotations-{version}".format(version=version))
     anno_fn = "EPIC_{split}_action_labels.csv".format(split=split)
+    anno_fn_pkl = osp.splitext(anno_fn)[0] + "_cache.pkl"
+    anno_path = osp.join(annos_root, anno_fn)
+    anno_pkl_path = osp.join(annos_root, anno_fn_pkl)
 
     # download annotation
-    if not osp.exists(osp.join(annos_root, anno_fn)):
-        download_file_path = utils.cached_download(anno_url)
-        ext = osp.splitext(anno_url)[1]
-        utils.extractall(download_file_path,
-                         data_dir, ext)
-    anno_path = osp.join(annos_root, anno_fn)
-    annotations = parse_action_annotation(anno_path)
+    annotations = None
+    if use_cache:
+        anno_fn_pkl = osp.splitext(anno_fn)[0] + ".pkl"
+        if osp.exists(anno_pkl_path):
+            df = pd.read_pickle(anno_pkl_path)
+            annotations = df.T.to_dict().values()
+    if annotations is None:
+        if not osp.exists(osp.join(annos_root, anno_fn)):
+            download_file_path = utils.cached_download(anno_url)
+            ext = osp.splitext(anno_url)[1]
+            utils.extractall(download_file_path, data_dir, ext)
+        annotations = parse_action_annotation(anno_path)
 
     # download videos
     if download_parallel_num is None:
@@ -201,6 +242,18 @@ def get_action_videos(split="train", download_parallel_num=None, download_timeou
         if isinstance(result, Exception):
             print i, dl_props[i]
             raise result
+
+    # filter error files
+    if not use_cache and skip_error_files:
+        annotations = _filter_action_annotations(videos_root, split, annotations)
+
+    # create cache
+    try:
+        df = pd.DataFrame(annotations)
+        df.to_pickle(anno_pkl_path)
+        print "Saved cache to %s" % anno_pkl_path
+    except Exception as e:
+        print e
 
     return videos_root, anno_path, annotations
 
