@@ -34,18 +34,14 @@ class LayerNormalization(chainer.Link):
 
     def __call__(self, x):
         if self.gamma.data is None:
-            in_size = x[0].shape # [None, :].shape
+            in_size = x[0].shape
             self._initialize_params(in_size)
-        # import ipdb; ipdb.set_trace()
         mean = F.broadcast_to(F.mean(x, keepdims=True), x.shape)
         var = F.broadcast_to(F.mean((x - mean) ** 2, keepdims=True), x.shape)
-        mean = mean[0] #[None, :]
-        var = var[0]# [None, :]
-        # s = F.sqrt(v + self.eps)
-        # x  = (x - u) / s
+        mean = mean[0]
+        var = var[0]
         return F.fixed_batch_normalization(
             x, self.gamma, self.beta, mean, var, self.eps)
-        # return F.bias(F.scale(x, self.gamma, axis=2), self.beta, axis=2)
 
 
 class DEMEncoder(chainer.Chain):
