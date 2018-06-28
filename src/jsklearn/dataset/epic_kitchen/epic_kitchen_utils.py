@@ -157,7 +157,23 @@ def parse_action_annotation(in_path):
         annotations.append(row.to_dict())
     return annotations
 
-def _filter_action_annotations(data_dir, split, annotations):
+
+def _check_video_frames(meta, anno, fps=None, min_frames=None, max_frames=None):
+    video_fps = meta["fps"]
+    start, stop = anno["start_frame"], anno["stop_frame"]
+    if fps is None:
+        nskips = 1
+    else:
+        nskips = int(video_fps // fps)
+    nframes = len(range(start, stop, nskips))
+    if min_frames is not None and min_frames > nframes:
+        return False
+    if max_frames is not None and max_frames < nframes:
+        return False
+    return True
+
+
+def _filter_action_annotations(data_dir, split, annotations, fps=None, min_frames=None):
     from collections import defaultdict
     import imageio
 
@@ -177,8 +193,12 @@ def _filter_action_annotations(data_dir, split, annotations):
             meta = video.get_meta_data()
             annos[video_path] = filter(lambda a: a["stop_frame"] < meta["nframes"],
                                        annos[video_path])
+            if min_frames is not None:
+                annos[video_path] = filter(lambda a: _check_video_frames(meta, a, fps, min_frames),
+                                           annos[video_path])
         except Exception as e:
             print "video %s is broken" % (video_path)
+            print e
             del annos[video_path]
         finally:
             if video is not None:
@@ -186,10 +206,15 @@ def _filter_action_annotations(data_dir, split, annotations):
     ret = []
     for a in annos.values():
         ret.extend(a)
+
+    print "Purged %d annotations" % (len(annotations) - len(ret))
+
     return ret
 
 
-def get_action_videos(split="train", download_parallel_num=None, download_timeout=None, force_download=False, use_cache=True, skip_error_files=True):
+def get_action_videos(split="train", download_parallel_num=None, download_timeout=None,
+                      force_download=False, use_cache=True,
+                      skip_error_files=True, fps=None, min_frames=None):
     import pandas as pd
 
     if split != "train":
@@ -244,8 +269,8 @@ def get_action_videos(split="train", download_parallel_num=None, download_timeou
             raise result
 
     # filter error files
-    if not use_cache and skip_error_files:
-        annotations = _filter_action_annotations(videos_root, split, annotations)
+    if not use_cache and (skip_error_files or min_frames is not None):
+        annotations = _filter_action_annotations(videos_root, split, annotations, fps, min_frames)
 
     # create cache
     try:

@@ -23,7 +23,8 @@ from jsklearn.dnn import DEMNet
 @click.argument("data_dir")
 @click.option("--gpu", type=int, default=0)
 @click.option("--fps", type=float, default=1.0)
-def predict(model_path, data_dir, gpu, fps):
+@click.option("--start-from", type=int, default=0)
+def predict(model_path, data_dir, gpu, fps, start_from):
     click.echo("Loading model")
     model = DEMNet(hidden_channels=1000, out_channels=3)
     model.reset_state()
@@ -40,7 +41,7 @@ def predict(model_path, data_dir, gpu, fps):
     if data_dir.lower() == "kitchen":
         click.echo("Using preset kitchen dataset")
         click.echo("fps is set to 4.0")
-        train_data = EpicKitchenActionDataset(split="train", fps=4.0)
+        train_data = EpicKitchenActionDataset(split="train", fps=4.0, min_frames=model.episode_size+1)
     else:
         train_data = VideoDataset(data_dir, fps=fps)
 
@@ -55,11 +56,14 @@ def predict(model_path, data_dir, gpu, fps):
 
     click.echo("Feeding")
     reconst_imgs, pred_imgs, hiddens = [], [], []
-    for imgs, label in train_data:
+    dataset_len = len(train_data)
+    for di in range(start_from, dataset_len):
+        imgs, label = train_data.get_example(di)
+        print "label:", label
         img_len = imgs.shape[0]
         if img_len < model.episode_size + 1:
             continue
-        imgs = imgs[:model.episode_size+1]
+        # imgs = imgs[:model.episode_size+1]
         model.reset_state()
         for i in range(model.episode_size):
             img, next_img = imgs[i], imgs[i+1]
@@ -72,6 +76,7 @@ def predict(model_path, data_dir, gpu, fps):
                 reconst.to_cpu()
                 hidden.to_cpu()
             pred, reconst, hidden = pred.data[0], reconst.data[0], hidden.data[0]
+
             reconst_imgs.append(reconst)
             pred_imgs.append(pred)
             hiddens.append(hidden)
@@ -90,7 +95,7 @@ def predict(model_path, data_dir, gpu, fps):
             else:
                 fig.canvas.draw()
                 fig.canvas.flush_events()
-            plt.pause(3)
+            plt.pause(1.0 / fps)
             tl.clear()
             tr.clear()
             bl.clear()

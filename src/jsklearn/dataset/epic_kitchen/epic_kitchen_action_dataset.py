@@ -19,17 +19,19 @@ class EpicKitchenActionDataset(chainer.dataset.DatasetMixin):
     def __init__(self, split="train", data_dir="auto", anno_path="auto",
                  fps=1.0, resize=(128, 128),
                  force_download=False, download_timeout=None, use_cache=True,
-                 skip_error_files=True):
+                 skip_error_files=True, min_frames=None):
         if split not in ["train", "test"]:
             raise ValueError("Split '%s' not available" % split)
 
         if data_dir == "auto":
             if anno_path == "auto":
                 data_dir, anno_path, annotations = get_action_videos(
-                    split, force_download=force_download, download_timeout=download_timeout, use_cache=use_cache, skip_error_files=skip_error_files)
+                    split, force_download=force_download, download_timeout=download_timeout,
+                    use_cache=use_cache, skip_error_files=skip_error_files, fps=fps, min_frames=min_frames)
             else:
                 data_dir = get_action_videos(
-                    split, force_download=force_download, download_timeout=download_timeout)[0]
+                    split, force_download=force_download, download_timeout=download_timeout,
+                    use_cache=use_cache, skip_error_files=skip_error_files, fps=fps, min_frames=min_frames)[0]
                 annotations = parse_action_annotation(anno_path)
         else:
             if anno_path == "auto":

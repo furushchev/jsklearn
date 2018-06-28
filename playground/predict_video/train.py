@@ -3,6 +3,7 @@
 # Author: lfurushchev <furushchev@jsk.imi.i.u-tokyo.ac.jp>
 
 import cv2
+cv2.setNumThreads(0)
 import click
 import os
 import numpy as np
@@ -75,6 +76,7 @@ class DEMNetTrainChain(chainer.Chain):
 
 
 class EpisodeIterator(chainer.dataset.Iterator):
+    """Deprecated"""
     def __init__(self, dataset, batch_size, episode_length,
                  repeat=False, shuffle=False, resize=(128, 128)):
         super(EpisodeIterator, self).__init__()
@@ -124,14 +126,17 @@ class EpisodeIterator(chainer.dataset.Iterator):
         length = len(self.dataset)
         episode_length = self.episode_length + 1  # for pred image
         self._previous_epoch_detail = self.epoch_detail
+        nloop = 0
         while min_frames < episode_length:
             if not self.repeat and self.iteration * self.batch_size >= length:
                 raise StopIteration()
             indices = [(offset + self.iteration) % length for offset in self.offsets]
             lengths = [self.dataset.get_length(i) for i in indices]
             min_frames = min(lengths)
-            # print "v", indices, lengths, min_frames, episode_length
             self.iteration += 1
+            nloop += 1
+            if nloop > 10:
+                print "v", indices, lengths, min_frames, episode_length
         epoch = self.iteration * self.batch_size // length
         self.is_new_epoch = self.epoch < epoch
         if self.is_new_epoch:
@@ -149,6 +154,7 @@ class EpisodeIterator(chainer.dataset.Iterator):
 
 
 class EpisodeUpdater(training.updaters.StandardUpdater):
+    """Deprecated"""
     def __init__(self, train_iter, optimizer, device):
         super(EpisodeUpdater, self).__init__(
             train_iter, optimizer,
@@ -179,17 +185,54 @@ class EpisodeUpdater(training.updaters.StandardUpdater):
         optimizer.update()
 
 
+class ParallelEpisodeUpdater(training.updaters.StandardUpdater):
+    def __init__(self, train_iter, optimizer, device):
+        super(ParallelEpisodeUpdater, self).__init__(
+            train_iter, optimizer, device=device,)
+
+    def update_core(self):
+        train_iter = self.get_iterator("main")
+        optimizer = self.get_optimizer("main")
+        model = optimizer.target
+
+        loss = 0
+
+        in_data = next(train_iter)  # B x (NiCHW, label)
+        xs = [d[0] for d in in_data]  # use images only
+        dtype = xs[0].dtype
+        x = np.asarray([x[:model.episode_size+1] for x in xs], dtype=dtype)  # Ni -> N
+        model.reset_state()
+        x = x.transpose((1, 0, 2, 3, 4))  # NBCHW
+        episode_size = x.shape[0] - 1
+        xi = None
+        for i in range(episode_size):
+            if xi is None:
+                xi = chainer.dataset.to_device(self.device, x[i])
+            pi = chainer.dataset.to_device(self.device, x[i+1])
+            ri = xi
+            loss += model(chainer.Variable(xi),
+                          chainer.Variable(ri),
+                          chainer.Variable(pi))
+            xi = pi
+
+        model.cleargrads()
+        loss.backward()
+        loss.unchain_backward()
+        optimizer.update()
+
+
 @click.command()
-@click.option("--batch-size", type=int, default=2)
+@click.option("--batch-size", type=int, default=20)
 @click.option("--max-iter", type=int, default=100000)
 @click.option("--gpu", type=int, default=0)
 @click.option("--out", type=str, default="results")
 @click.option("--fps", type=float, default=4.0)
+@click.option("--disable-cache", is_flag=True)
 @click.option("--loss-func", type=click.Choice(["mse", "gdl", "mse_gdl"]), default="mse_gdl")
 @click.option("--log-interval", type=int, default=10)
 @click.option("--snapshot-interval", type=int, default=100)
 @click.option("--resume", type=str, default="")
-def train(batch_size, max_iter, gpu, out, fps, loss_func, log_interval, snapshot_interval, resume):
+def train(batch_size, max_iter, gpu, out, fps, disable_cache, loss_func, log_interval, snapshot_interval, resume):
     click.echo("Preparing model")
     model = DEMNet(hidden_channels=1000, out_channels=3)
     train_model = DEMNetTrainChain(model, loss_func=loss_func)
@@ -199,14 +242,16 @@ def train(batch_size, max_iter, gpu, out, fps, loss_func, log_interval, snapshot
         model.to_gpu(gpu)
 
     click.echo("Loading dataset")
-    train_data = EpicKitchenActionDataset(split="train", fps=fps)
-    train_iter = EpisodeIterator(train_data, batch_size, model.episode_size, repeat=True, shuffle=False)
+    train_data = EpicKitchenActionDataset(split="train", fps=fps, use_cache=not disable_cache, min_frames=model.episode_size+1)
+    # train_iter = EpisodeIterator(train_data, batch_size, model.episode_size, repeat=True, shuffle=False)
+    train_iter = chainer.iterators.MultiprocessIterator(train_data, batch_size, n_prefetch=5, shared_mem=1000*1000*100)
 
     click.echo("Setting up trainer")
     optimizer = chainer.optimizers.Adam()
     optimizer.setup(train_model)
 
-    updater = EpisodeUpdater(train_iter, optimizer, device=gpu)
+    # updater = EpisodeUpdater(train_iter, optimizer, device=gpu)
+    updater= ParallelEpisodeUpdater(train_iter, optimizer, device=gpu)
     trainer = training.Trainer(updater, (max_iter, "iteration"), out=out)
 
     trainer.extend(extensions.LogReport(trigger=(log_interval, "iteration")))
