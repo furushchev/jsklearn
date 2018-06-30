@@ -12,6 +12,10 @@ from jsklearn.dnn.lstm import ConvLSTM2D
 
 
 class LayerNormalization(chainer.Link):
+    """https://arxiv.org/pdf/1607.06450.pdf
+       http://cs231n.stanford.edu/slides/2018/cs231n_2018_lecture07.pdf
+    """
+
     def __init__(self, size=None, eps=1e-6, initial_gamma=None,
                  initial_beta=None):
         super(LayerNormalization, self).__init__()

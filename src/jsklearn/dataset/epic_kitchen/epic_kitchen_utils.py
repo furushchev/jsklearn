@@ -224,7 +224,12 @@ def get_action_videos(split="train", download_parallel_num=None, download_timeou
     videos_root = osp.join(data_dir, "videos")
     annos_root = osp.join(data_dir, "annotations-{version}".format(version=version))
     anno_fn = "EPIC_{split}_action_labels.csv".format(split=split)
-    anno_fn_pkl = osp.splitext(anno_fn)[0] + "_cache.pkl"
+    anno_fn_pkl = osp.splitext(anno_fn)[0] + "_cache"
+    if fps is not None:
+        anno_fn_pkl += "_%f" % fps
+    if min_frames is not None:
+        anno_fn_pkl += "_%d" % min_frames
+    anno_fn_pkl += ".pkl"
     anno_path = osp.join(annos_root, anno_fn)
     anno_pkl_path = osp.join(annos_root, anno_fn_pkl)
 
